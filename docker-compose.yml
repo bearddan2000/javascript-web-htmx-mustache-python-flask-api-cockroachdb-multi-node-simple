@@ -1,0 +1,58 @@
+version: "3"
+
+services:
+  web:
+    image: httpd:latest
+    volumes:
+      - ./web/bin:/usr/local/apache2/htdocs 
+    ports:
+      - 80:80
+      
+  db:
+    image: cockroachdb/cockroach:v19.2.4
+    container_name: db
+    ports:
+     - "20000:26257"
+     - "8000:8080"
+    command: start --insecure
+
+  db_1:
+    image: cockroachdb/cockroach:v19.2.4
+    container_name: db_1
+    ports:
+     - "20001:26257"
+     - "8001:8080"
+    command: start --insecure --join=db
+
+  db_2:
+    image: cockroachdb/cockroach:v19.2.4
+    container_name: db_2
+    ports:
+     - "20002:26257"
+     - "8002:8080"
+    command: start --insecure --join=db
+
+  db-runner:
+    build: db
+    command: shell -c "/wait && /usr/local/bin/init-data.sh db:26257"
+    environment:
+      - WAIT_HOSTS=db:26257
+      - WAIT_HOSTS_TIMEOUT=300
+      - WAIT_SLEEP_INTERVAL=120
+      - WAIT_HOST_CONNECT_TIMEOUT=30
+    volumes:
+     - ./db/sql:/docker-entrypoint-initdb.d
+    depends_on:
+     - db
+     - db_1
+     - db_2
+    links:
+     - "db:db"
+     - "db_1:db_1"
+     - "db_2:db_2"
+
+  api:
+    build: api
+    command: python app.py
+    ports:
+      - "81:5000"
